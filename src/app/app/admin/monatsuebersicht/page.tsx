@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentUserProfile } from "@/lib/auth/profile";
@@ -6,7 +5,6 @@ import { normalizeYearMonth } from "@/lib/shifts/dates";
 import { getShiftsForMonth } from "@/lib/shifts/queries";
 import { buildMonthlyEmployeeTotals } from "@/lib/shifts/schedule";
 import { MonthNav } from "@/components/schedule/MonthNav";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 type MonatsuebersichtSearchParams = {
@@ -35,12 +33,6 @@ export default async function AdminMonatsuebersichtPage({
   return (
     <div className="flex flex-1 flex-col px-4 py-8 md:px-8">
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-        <div className="flex justify-end">
-          <Button variant="outline" size="sm" render={<Link href="/app/admin" />}>
-            Zurück
-          </Button>
-        </div>
-
         <MonthNav year={year} month={month} basePath="/app/admin/monatsuebersicht" />
 
         {shiftsResult.status === "error" ? (

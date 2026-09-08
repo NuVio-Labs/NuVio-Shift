@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/ui/button";
 
 export default function Home() {
   return (
@@ -12,9 +11,9 @@ export default function Home() {
         <p className="text-muted-foreground">
           Einfache Dienstplanung für kleine Teams.
         </p>
-        <Button className="mt-4" render={<Link href="/app" />}>
+        <LinkButton className="mt-4" href="/app">
           Zum Dienstplan
-        </Button>
+        </LinkButton>
       </div>
     </div>
   );

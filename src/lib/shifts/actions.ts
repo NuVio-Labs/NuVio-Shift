@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 
 import { getCurrentUserProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { isSaturday, parseISODate } from "@/lib/shifts/dates";
+import { isSaturday, parseISODate, formatGermanDayMonth, type CalendarDate } from "@/lib/shifts/dates";
+import { SHIFT_CONFIG } from "@/lib/shifts/config";
+import { sendPushToUser } from "@/lib/push/internal";
 import type { ShiftType } from "@/types/domain";
 
 export type ShiftMutationResult =
@@ -55,7 +57,60 @@ function validateShiftSlot(shiftDate: unknown, shiftType: unknown) {
     return null;
   }
 
-  return { shiftDate, shiftType };
+  return { shiftDate, shiftType, date };
+}
+
+type ShiftNotificationKind = "assigned" | "removed";
+
+function buildShiftNotificationPayload(
+  date: CalendarDate,
+  shiftType: ShiftType,
+  kind: ShiftNotificationKind,
+) {
+  const config = SHIFT_CONFIG[shiftType];
+  const dateLabel = `Samstag, ${formatGermanDayMonth(date)} · ${config.start}–${config.end}`;
+
+  return {
+    title: "NuVio Shift",
+    body: kind === "assigned" ? `Neue Schicht: ${dateLabel}` : `Schicht entfernt: ${dateLabel}`,
+    url: "/app/meine-schichten",
+  };
+}
+
+/**
+ * Notifies whoever is losing/gaining a slot — never awaited by the caller
+ * beyond this helper's own `Promise.all`, and never lets one recipient's
+ * failure affect the other or the (already-committed) shift mutation.
+ */
+async function notifyShiftChange(
+  previousEmployeeId: string | null,
+  newEmployeeId: string | null,
+  date: CalendarDate,
+  shiftType: ShiftType,
+): Promise<void> {
+  if (previousEmployeeId === newEmployeeId) {
+    return; // same employee re-saved — no actual change, no push
+  }
+
+  const notifications: Promise<void>[] = [];
+
+  if (previousEmployeeId) {
+    notifications.push(
+      sendPushToUser(previousEmployeeId, buildShiftNotificationPayload(date, shiftType, "removed")).catch(
+        (err: unknown) => console.error("Failed to send 'Schicht entfernt' push:", err),
+      ),
+    );
+  }
+
+  if (newEmployeeId) {
+    notifications.push(
+      sendPushToUser(newEmployeeId, buildShiftNotificationPayload(date, shiftType, "assigned")).catch(
+        (err: unknown) => console.error("Failed to send 'Neue Schicht' push:", err),
+      ),
+    );
+  }
+
+  await Promise.all(notifications);
 }
 
 export async function assignEmployeeToShift(input: {
@@ -63,7 +118,8 @@ export async function assignEmployeeToShift(input: {
   shiftType: ShiftType;
   employeeId: string;
 }): Promise<ShiftMutationResult> {
-  if (!(await requireActiveScheduler())) {
+  const scheduler = await requireActiveScheduler();
+  if (!scheduler) {
     return PERMISSION_ERROR;
   }
 
@@ -92,16 +148,28 @@ export async function assignEmployeeToShift(input: {
     return EMPLOYEE_NOT_ASSIGNABLE_ERROR;
   }
 
-  // Upsert on the (shift_date, shift_type) unique constraint: creates the
-  // row on first assignment, updates it if one already exists — one
-  // statement, no read-then-write race between concurrent schedulers.
+  // Determine the previous state server-side — the client never supplies
+  // (or is trusted for) who is currently assigned.
+  const { data: existingShift } = await supabase
+    .from("shifts")
+    .select("employee_id")
+    .eq("shift_date", slot.shiftDate)
+    .eq("shift_type", slot.shiftType)
+    .maybeSingle();
+
+  const previousEmployeeId: string | null = existingShift?.employee_id ?? null;
+
+  // Upsert on the (company_id, shift_date, shift_type) unique constraint:
+  // creates the row on first assignment, updates it if one already exists —
+  // one statement, no read-then-write race between concurrent schedulers.
   const { error } = await supabase.from("shifts").upsert(
     {
+      company_id: scheduler.companyId,
       shift_date: slot.shiftDate,
       shift_type: slot.shiftType,
       employee_id: input.employeeId,
     },
-    { onConflict: "shift_date,shift_type" },
+    { onConflict: "company_id,shift_date,shift_type" },
   );
 
   if (error) {
@@ -109,6 +177,11 @@ export async function assignEmployeeToShift(input: {
   }
 
   revalidatePath("/app/dienstplan");
+
+  // Push is strictly best-effort and only after the save succeeded — a
+  // notification failure must never roll back or fail the mutation.
+  await notifyShiftChange(previousEmployeeId, input.employeeId, slot.date, slot.shiftType);
+
   return { status: "ok" };
 }
 
@@ -127,6 +200,15 @@ export async function removeEmployeeFromShift(input: {
 
   const supabase = await createClient();
 
+  const { data: existingShift } = await supabase
+    .from("shifts")
+    .select("employee_id")
+    .eq("shift_date", slot.shiftDate)
+    .eq("shift_type", slot.shiftType)
+    .maybeSingle();
+
+  const previousEmployeeId: string | null = existingShift?.employee_id ?? null;
+
   // Never DELETE the row — clearing employee_id keeps the slot as "Nicht
   // besetzt". If no row exists yet, this simply matches zero rows.
   const { error } = await supabase
@@ -140,5 +222,8 @@ export async function removeEmployeeFromShift(input: {
   }
 
   revalidatePath("/app/dienstplan");
+
+  await notifyShiftChange(previousEmployeeId, null, slot.date, slot.shiftType);
+
   return { status: "ok" };
 }

@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/domain";
 
@@ -6,6 +8,7 @@ export type CurrentUserProfile = {
   name: string;
   role: UserRole;
   active: boolean;
+  companyId: string;
 };
 
 export type CurrentUserProfileResult =
@@ -20,7 +23,7 @@ export type CurrentUserProfileResult =
  * authenticated user. The role must never be trusted from the browser —
  * this always reads it fresh from `public.profiles` on the server.
  */
-export async function getCurrentUserProfile(): Promise<CurrentUserProfileResult> {
+export const getCurrentUserProfile = cache(async (): Promise<CurrentUserProfileResult> => {
   const supabase = await createClient();
 
   const { data: claimsData } = await supabase.auth.getClaims();
@@ -32,7 +35,7 @@ export async function getCurrentUserProfile(): Promise<CurrentUserProfileResult>
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, name, role, active")
+    .select("id, name, role, active, company_id")
     .eq("id", userId)
     .maybeSingle();
 
@@ -49,9 +52,10 @@ export async function getCurrentUserProfile(): Promise<CurrentUserProfileResult>
     name: data.name,
     role: data.role as UserRole,
     active: data.active,
+    companyId: data.company_id,
   };
 
   return profile.active
     ? { status: "ok", profile }
     : { status: "inactive", profile };
-}
+});

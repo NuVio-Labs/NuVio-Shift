@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentUserProfile } from "@/lib/auth/profile";
@@ -77,42 +76,11 @@ export default async function AppHomePage() {
   const { profile } = result;
 
   return (
-    <AppShell>
-      <div className="flex flex-col gap-1">
-        <p className="text-sm text-muted-foreground">Angemeldet als:</p>
-        <p className="text-lg font-medium text-foreground">{profile.name}</p>
-      </div>
-      <div className="flex flex-col gap-1">
-        <p className="text-sm text-muted-foreground">Rolle:</p>
-        <p className="text-lg font-medium text-foreground">
-          {ROLE_LABELS[profile.role]}
-        </p>
-      </div>
-      {profile.role === "scheduler" && (
-        <Button render={<Link href="/app/dienstplan" />}>
-          Dienstplan öffnen
-        </Button>
-      )}
-      {profile.role === "admin" && (
-        <Button render={<Link href="/app/dienstplan" />}>
-          Dienstplan ansehen
-        </Button>
-      )}
-      {profile.role === "admin" && (
-        <Button variant="outline" render={<Link href="/app/admin" />}>
-          Verwaltung
-        </Button>
-      )}
-      <Button
-        variant={profile.role === "employee" ? "default" : "outline"}
-        render={<Link href="/app/meine-schichten" />}
-      >
-        Meine Schichten
-      </Button>
-      <Button variant="outline" render={<Link href="/app/benachrichtigungen" />}>
-        Benachrichtigungen
-      </Button>
-      <LogoutButton />
-    </AppShell>
+    <div className="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center">
+      <h1 className="text-xl font-semibold tracking-tight text-foreground">
+        Willkommen, {profile.name}
+      </h1>
+      <p className="mt-2 text-muted-foreground">{ROLE_LABELS[profile.role]}</p>
+    </div>
   );
 }

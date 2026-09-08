@@ -1,10 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentUserProfile } from "@/lib/auth/profile";
 import { getMyShifts } from "@/lib/shifts/queries";
 import { MyShiftCard } from "@/components/shifts/MyShiftCard";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default async function MeineSchichtenPage() {
@@ -25,12 +23,7 @@ export default async function MeineSchichtenPage() {
   return (
     <div className="flex flex-1 flex-col px-4 py-8 md:px-8">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
-        <div className="flex items-center justify-between gap-2">
-          <h1 className="text-lg font-semibold text-foreground">Meine Schichten</h1>
-          <Button variant="outline" size="sm" render={<Link href="/app" />}>
-            Zurück
-          </Button>
-        </div>
+        <h1 className="text-lg font-semibold text-foreground">Meine Schichten</h1>
 
         {shiftsResult.status !== "ok" ? (
           <Card>

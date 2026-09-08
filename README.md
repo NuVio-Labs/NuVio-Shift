@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NuVio Shift
 
-## Getting Started
+**Schichten. Einfach geplant.**
 
-First, run the development server:
+NuVio Shift is a lightweight, mobile-first web app for scheduling Saturday shifts in small teams — built to replace a paper schedule with something just as simple to use, but digital.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Features
+
+- **Authentication & roles** — Supabase Auth with three roles per company: `admin`, `scheduler`, `employee`. No public signup; accounts are created by an admin invite.
+- **Multi-tenant** — Each company's employees, shifts, and settings are isolated at the database level via Postgres Row Level Security.
+- **Onboarding by invite link** — An admin generates a one-time, expiring invite link (with a chosen role) from **Onboarding**; the invitee registers through it and is added straight to the right company.
+- **Schedule** — Fixed Saturday shift model (Früh 08:00–14:00, Spät 14:00–20:00). Schedulers assign, change, and remove employees; employees see their own upcoming shifts; admins get a read-only view plus monthly totals and planned hours.
+- **PWA & push notifications** — Installable on mobile, with Web Push notifying employees when a shift is assigned, changed, or removed.
+- **Settings** — Self-service profile (name, phone, weekly target hours) with an admin-managed hourly wage shown read-only to its owner; push notification preferences live in the same place.
+
+## Tech stack
+
+- [Next.js](https://nextjs.org) (App Router) + React + TypeScript
+- Tailwind CSS + [shadcn/ui](https://ui.shadcn.com)-style components on top of [Base UI](https://base-ui.com)
+- [Supabase](https://supabase.com) — Auth, Postgres, Row Level Security
+- Web Push (VAPID) for notifications
+
+## Getting started
+
+1. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+2. Copy `.env.example` to `.env.local` and fill in your Supabase project URL/keys and VAPID keys (generate with `npx web-push generate-vapid-keys`).
+
+3. Apply the database migrations to your Supabase project (via the [Supabase CLI](https://supabase.com/docs/guides/local-development) or the SQL editor):
+
+   ```bash
+   supabase db push
+   ```
+
+4. Run the dev server:
+
+   ```bash
+   npm run dev
+   ```
+
+   Open [http://localhost:3000](http://localhost:3000).
+
+## Roles
+
+| Role | Can |
+|---|---|
+| `admin` | View the full schedule, manage employees and their hourly wage, generate onboarding invites |
+| `scheduler` | Assign/change/remove shift assignments |
+| `employee` | View their own upcoming shifts and profile |
+
+## Project structure
+
 ```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+src/
+├── app/            Routes (App Router)
+├── components/     UI components, grouped by feature
+├── lib/            Business logic, Supabase clients, server actions
+└── types/          Shared domain types
+supabase/
+└── migrations/     Database schema, in order
+```

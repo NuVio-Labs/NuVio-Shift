@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentUserProfile } from "@/lib/auth/profile";
@@ -6,7 +5,6 @@ import { normalizeYearMonth } from "@/lib/shifts/dates";
 import { getAssignableEmployees, getShiftsForMonth } from "@/lib/shifts/queries";
 import { buildMonthSchedule } from "@/lib/shifts/schedule";
 import { MonthSchedule } from "@/components/schedule/MonthSchedule";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 type DienstplanSearchParams = {
@@ -63,11 +61,6 @@ export default async function DienstplanPage({
   return (
     <div className="flex flex-1 flex-col px-4 py-8 md:px-8">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-        <div className="flex justify-end">
-          <Button variant="outline" size="sm" render={<Link href="/app" />}>
-            Zurück
-          </Button>
-        </div>
         <MonthSchedule
           year={year}
           month={month}
