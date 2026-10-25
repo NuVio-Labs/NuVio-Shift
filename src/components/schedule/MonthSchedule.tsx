@@ -1,103 +1,62 @@
-import { formatGermanDate } from "@/lib/shifts/dates";
+import { toISODate } from "@/lib/shifts/dates";
 import type { AssignableEmployee } from "@/lib/shifts/queries";
-import type { SaturdaySchedule } from "@/lib/shifts/schedule";
+import type { DaySchedule } from "@/lib/shifts/schedule";
+import { CreateShiftDialog } from "@/components/schedule/CreateShiftDialog";
+import { DayCard } from "@/components/schedule/DayCard";
 import { MonthNav } from "@/components/schedule/MonthNav";
-import { SaturdayCard } from "@/components/schedule/SaturdayCard";
-import { ShiftAssignmentDialog } from "@/components/schedule/ShiftAssignmentDialog";
-import { ShiftDisplay } from "@/components/schedule/ShiftDisplay";
+import { LinkButton } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 export function MonthSchedule({
   year,
   month,
-  schedules,
+  days,
   canEdit = false,
+  canManageTemplates = false,
   employees = [],
 }: {
   year: number;
   month: number;
-  schedules: SaturdaySchedule[];
+  days: DaySchedule[];
   canEdit?: boolean;
+  canManageTemplates?: boolean;
   employees?: AssignableEmployee[];
 }) {
+  const firstOfMonth = toISODate({ year, month, day: 1 });
+
   return (
     <div className="flex flex-col gap-6">
       <MonthNav year={year} month={month} basePath="/app/dienstplan" />
 
-      {/* Desktop / tablet */}
-      <div className="hidden overflow-x-auto rounded-xl ring-1 ring-foreground/10 md:block">
-        <table className="w-full border-collapse text-left">
-          <thead>
-            <tr className="border-b border-border bg-muted/50">
-              <th className="px-4 py-3 text-sm font-medium text-muted-foreground">
-                Samstag
-              </th>
-              <th className="px-4 py-3 text-sm font-medium text-muted-foreground">
-                Früh
-              </th>
-              <th className="px-4 py-3 text-sm font-medium text-muted-foreground">
-                Spät
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {schedules.map((schedule) => (
-              <tr key={schedule.iso} className="border-b border-border last:border-0">
-                <td className="px-4 py-3 align-top text-sm font-medium text-foreground">
-                  {formatGermanDate(schedule.date)}
-                </td>
-                <td className="px-4 py-3 align-top">
-                  <div className="flex flex-col gap-2">
-                    <ShiftDisplay
-                      shiftType="early"
-                      assignment={schedule.early}
-                      showLabel={false}
-                    />
-                    {canEdit && (
-                      <ShiftAssignmentDialog
-                        shiftDate={schedule.iso}
-                        shiftType="early"
-                        currentEmployeeId={schedule.early?.employeeId ?? null}
-                        currentEmployeeName={schedule.early?.employeeName ?? null}
-                        employees={employees}
-                      />
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-3 align-top">
-                  <div className="flex flex-col gap-2">
-                    <ShiftDisplay
-                      shiftType="late"
-                      assignment={schedule.late}
-                      showLabel={false}
-                    />
-                    {canEdit && (
-                      <ShiftAssignmentDialog
-                        shiftDate={schedule.iso}
-                        shiftType="late"
-                        currentEmployeeId={schedule.late?.employeeId ?? null}
-                        currentEmployeeName={schedule.late?.employeeName ?? null}
-                        employees={employees}
-                      />
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {(canEdit || canManageTemplates) && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {canManageTemplates && (
+            <LinkButton variant="outline" size="sm" href="/app/schichtvorlagen">
+              Schichtvorlagen
+            </LinkButton>
+          )}
+          {canEdit && <CreateShiftDialog defaultDate={firstOfMonth} employees={employees} />}
+        </div>
+      )}
 
-      {/* Mobile */}
-      <div className="flex flex-col gap-4 md:hidden">
-        {schedules.map((schedule) => (
-          <SaturdayCard
-            key={schedule.iso}
-            schedule={schedule}
-            canEdit={canEdit}
-            employees={employees}
-          />
-        ))}
-      </div>
+      {days.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col gap-1">
+            <p className="text-foreground">In diesem Monat sind keine Schichten geplant.</p>
+            <p className="text-sm text-muted-foreground">
+              {canManageTemplates
+                ? "Lege unter „Schichtvorlagen“ wiederkehrende Schichten an (z. B. jeden Samstag 08–14 Uhr) oder füge eine einmalige Schicht hinzu."
+                : "Sobald Schichten geplant sind, erscheinen sie hier."}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {days.map((day) => (
+            <DayCard key={day.iso} day={day} canEdit={canEdit} employees={employees} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

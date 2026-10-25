@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUserProfile } from "@/lib/auth/profile";
 import { normalizeYearMonth } from "@/lib/shifts/dates";
-import { getAssignableEmployees, getShiftsForMonth } from "@/lib/shifts/queries";
+import { getAssignableEmployees, getShiftTemplates, getShiftsForMonth } from "@/lib/shifts/queries";
 import { buildMonthSchedule } from "@/lib/shifts/schedule";
 import { MonthSchedule } from "@/components/schedule/MonthSchedule";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,16 +31,19 @@ export default async function DienstplanPage({
   }
 
   const canEdit = result.profile.role === "scheduler";
+  // Admin and scheduler may both configure templates (mirrors the RLS policy).
+  const canManageTemplates = result.profile.role === "admin" || result.profile.role === "scheduler";
 
   const params = await searchParams;
   const { year, month } = normalizeYearMonth(params.year, params.month);
 
-  const [shiftsResult, employeesResult] = await Promise.all([
+  const [shiftsResult, templatesResult, employeesResult] = await Promise.all([
     getShiftsForMonth(year, month),
+    getShiftTemplates(),
     canEdit ? getAssignableEmployees() : Promise.resolve({ status: "ok" as const, employees: [] }),
   ]);
 
-  if (shiftsResult.status === "error") {
+  if (shiftsResult.status === "error" || templatesResult.status === "error") {
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-16">
         <Card className="w-full max-w-sm">
@@ -55,7 +58,7 @@ export default async function DienstplanPage({
     );
   }
 
-  const schedules = buildMonthSchedule(year, month, shiftsResult.shiftsByDate);
+  const days = buildMonthSchedule(year, month, shiftsResult.shifts, templatesResult.templates);
   const employees = employeesResult.status === "ok" ? employeesResult.employees : [];
 
   return (
@@ -64,8 +67,9 @@ export default async function DienstplanPage({
         <MonthSchedule
           year={year}
           month={month}
-          schedules={schedules}
+          days={days}
           canEdit={canEdit}
+          canManageTemplates={canManageTemplates}
           employees={employees}
         />
       </div>

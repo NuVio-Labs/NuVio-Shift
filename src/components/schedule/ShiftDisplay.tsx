@@ -1,29 +1,30 @@
-import { SHIFT_CONFIG } from "@/lib/shifts/config";
-import type { ShiftAssignment } from "@/lib/shifts/queries";
-import type { ShiftType } from "@/types/domain";
 import { cn } from "cn";
 
 export function ShiftDisplay({
-  shiftType,
-  assignment,
-  showLabel = true,
+  label,
+  startTime,
+  endTime,
+  employeeName,
+  isOneOff = false,
 }: {
-  shiftType: ShiftType;
-  assignment?: ShiftAssignment;
-  showLabel?: boolean;
+  label: string;
+  startTime: string;
+  endTime: string;
+  employeeName: string | null;
+  isOneOff?: boolean;
 }) {
-  const config = SHIFT_CONFIG[shiftType];
-  const employeeName = assignment?.employeeName;
-
   return (
     <div className="flex flex-col gap-0.5">
-      {showLabel && (
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          {config.label}
-        </p>
-      )}
+      <p className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        {label}
+        {isOneOff && (
+          <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium tracking-normal normal-case">
+            Einmalig
+          </span>
+        )}
+      </p>
       <p className="text-sm text-muted-foreground">
-        {config.start}–{config.end}
+        {startTime}–{endTime}
       </p>
       <p
         className={cn(
