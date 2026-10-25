@@ -4,6 +4,7 @@ import { getCurrentUserProfile } from "@/lib/auth/profile";
 import { normalizeYearMonth } from "@/lib/shifts/dates";
 import { getShiftsForMonth } from "@/lib/shifts/queries";
 import { buildMonthlyEmployeeTotals } from "@/lib/shifts/schedule";
+import { formatHours } from "@/lib/shifts/time";
 import { MonthNav } from "@/components/schedule/MonthNav";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -28,7 +29,7 @@ export default async function AdminMonatsuebersichtPage({
 
   const shiftsResult = await getShiftsForMonth(year, month);
   const totals =
-    shiftsResult.status === "ok" ? buildMonthlyEmployeeTotals(shiftsResult.shiftsByDate) : [];
+    shiftsResult.status === "ok" ? buildMonthlyEmployeeTotals(shiftsResult.shifts) : [];
 
   return (
     <div className="flex flex-1 flex-col px-4 py-8 md:px-8">
@@ -80,7 +81,7 @@ export default async function AdminMonatsuebersichtPage({
                         {total.shiftCount}
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {total.plannedHours} Std.
+                        {formatHours(total.plannedHours)} Std.
                       </td>
                     </tr>
                   ))}
@@ -97,7 +98,7 @@ export default async function AdminMonatsuebersichtPage({
                       {total.employeeName}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {total.shiftCount} Schichten · {total.plannedHours} geplante Stunden
+                      {total.shiftCount} {total.shiftCount === 1 ? "Schicht" : "Schichten"} · {formatHours(total.plannedHours)} geplante Stunden
                     </p>
                   </CardContent>
                 </Card>

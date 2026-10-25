@@ -1,4 +1,27 @@
-const SATURDAY = 6; // Date#getUTCDay(): Sunday = 0 … Saturday = 6
+import type { IsoWeekday } from "@/types/domain";
+
+/** Indexed by ISO weekday (1 = Montag … 7 = Sonntag); index 0 unused. */
+const GERMAN_WEEKDAY_NAMES = [
+  "",
+  "Montag",
+  "Dienstag",
+  "Mittwoch",
+  "Donnerstag",
+  "Freitag",
+  "Samstag",
+  "Sonntag",
+];
+
+export const ISO_WEEKDAYS: IsoWeekday[] = [1, 2, 3, 4, 5, 6, 7];
+
+export function isIsoWeekday(value: unknown): value is IsoWeekday {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 7;
+}
+
+/** `Dienstag` */
+export function getGermanWeekdayName(weekday: IsoWeekday): string {
+  return GERMAN_WEEKDAY_NAMES[weekday];
+}
 
 const GERMAN_MONTH_NAMES = [
   "Januar",
@@ -37,9 +60,10 @@ function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
-/** True if the given calendar date falls on a Saturday. */
-export function isSaturday({ year, month, day }: CalendarDate): boolean {
-  return new Date(Date.UTC(year, month - 1, day)).getUTCDay() === SATURDAY;
+/** ISO weekday of a calendar date (Monday = 1 … Sunday = 7), like Postgres `isodow`. */
+export function getIsoWeekday({ year, month, day }: CalendarDate): IsoWeekday {
+  const jsDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay(); // Sunday = 0
+  return (jsDay === 0 ? 7 : jsDay) as IsoWeekday;
 }
 
 /**
@@ -62,19 +86,16 @@ export function parseISODate(iso: string): CalendarDate | null {
   return { year, month, day };
 }
 
-/** Every Saturday of the given month, in ascending order. */
-export function getSaturdaysOfMonth(year: number, month: number): CalendarDate[] {
+/** Every day of the given month, in ascending order. */
+export function getDaysOfMonth(year: number, month: number): CalendarDate[] {
   const total = daysInMonth(year, month);
-  const saturdays: CalendarDate[] = [];
+  const days: CalendarDate[] = [];
 
   for (let day = 1; day <= total; day++) {
-    const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-    if (weekday === SATURDAY) {
-      saturdays.push({ year, month, day });
-    }
+    days.push({ year, month, day });
   }
 
-  return saturdays;
+  return days;
 }
 
 function pad(value: number, length: number): string {
@@ -89,6 +110,16 @@ export function toISODate({ year, month, day }: CalendarDate): string {
 /** `05.09.2026` */
 export function formatGermanDate({ year, month, day }: CalendarDate): string {
   return `${pad(day, 2)}.${pad(month, 2)}.${year}`;
+}
+
+/** `Dienstag, 05.09.` */
+export function formatGermanWeekdayDayMonth(date: CalendarDate): string {
+  return `${getGermanWeekdayName(getIsoWeekday(date))}, ${formatGermanDayMonth(date)}`;
+}
+
+/** `Dienstag, 05.09.2026` */
+export function formatGermanWeekdayDate(date: CalendarDate): string {
+  return `${getGermanWeekdayName(getIsoWeekday(date))}, ${formatGermanDate(date)}`;
 }
 
 /** `05.09.` — for contexts where month/year is already shown elsewhere. */

@@ -2,9 +2,15 @@
 
 import { useState, useTransition } from "react";
 
-import { assignEmployeeToShift, removeEmployeeFromShift } from "@/lib/shifts/actions";
+import {
+  assignEmployeeToShift,
+  assignEmployeeToTemplateSlot,
+  deleteShift,
+  removeEmployeeFromShift,
+  type ShiftMutationResult,
+} from "@/lib/shifts/actions";
 import type { AssignableEmployee } from "@/lib/shifts/queries";
-import type { ShiftType } from "@/types/domain";
+import type { ScheduleSlot } from "@/lib/shifts/schedule";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,75 +30,79 @@ import {
 
 export function ShiftAssignmentDialog({
   shiftDate,
-  shiftType,
-  currentEmployeeId,
-  currentEmployeeName,
+  slot,
   employees,
 }: {
   shiftDate: string;
-  shiftType: ShiftType;
-  currentEmployeeId: string | null;
-  currentEmployeeName: string | null;
+  slot: ScheduleSlot;
   employees: AssignableEmployee[];
 }) {
   const [open, setOpen] = useState(false);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState(currentEmployeeId ?? "");
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(slot.employeeId ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
     if (nextOpen) {
-      setSelectedEmployeeId(currentEmployeeId ?? "");
+      setSelectedEmployeeId(slot.employeeId ?? "");
       setError(null);
     }
+  }
+
+  function run(action: () => Promise<ShiftMutationResult>) {
+    startTransition(async () => {
+      const result = await action();
+      if (result.status === "error") {
+        setError(result.message);
+        return;
+      }
+      setOpen(false);
+    });
   }
 
   function handleSave() {
     if (!selectedEmployeeId) return;
 
-    startTransition(async () => {
-      const result = await assignEmployeeToShift({
-        shiftDate,
-        shiftType,
-        employeeId: selectedEmployeeId,
-      });
-
-      if (result.status === "error") {
-        setError(result.message);
-        return;
-      }
-
-      setOpen(false);
-    });
+    run(() =>
+      slot.shiftId
+        ? assignEmployeeToShift({ shiftId: slot.shiftId, employeeId: selectedEmployeeId })
+        : assignEmployeeToTemplateSlot({
+            shiftDate,
+            templateId: slot.templateId ?? "",
+            employeeId: selectedEmployeeId,
+          }),
+    );
   }
 
   function handleRemove() {
-    startTransition(async () => {
-      const result = await removeEmployeeFromShift({ shiftDate, shiftType });
-
-      if (result.status === "error") {
-        setError(result.message);
-        return;
-      }
-
-      setOpen(false);
-    });
+    if (!slot.shiftId) return;
+    const shiftId = slot.shiftId;
+    run(() => removeEmployeeFromShift({ shiftId }));
   }
+
+  function handleDelete() {
+    if (!slot.shiftId) return;
+    const shiftId = slot.shiftId;
+    run(() => deleteShift({ shiftId }));
+  }
+
+  const employeeItems = employees.map((employee) => ({ value: employee.id, label: employee.name }));
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger className={buttonVariants({ variant: "outline", size: "sm" })}>
-        {currentEmployeeName ? "Ändern" : "Mitarbeiter zuweisen"}
+        {slot.employeeName ? "Ändern" : "Mitarbeiter zuweisen"}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {currentEmployeeName ? "Zuweisung ändern" : "Mitarbeiter zuweisen"}
+            {slot.label} · {slot.startTime}–{slot.endTime}
           </DialogTitle>
         </DialogHeader>
 
         <Select
+          items={employeeItems}
           value={selectedEmployeeId}
           onValueChange={(value) => setSelectedEmployeeId(value ?? "")}
         >
@@ -100,9 +110,9 @@ export function ShiftAssignmentDialog({
             <SelectValue placeholder="Mitarbeiter auswählen" />
           </SelectTrigger>
           <SelectContent>
-            {employees.map((employee) => (
-              <SelectItem key={employee.id} value={employee.id}>
-                {employee.name}
+            {employeeItems.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -111,24 +121,31 @@ export function ShiftAssignmentDialog({
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <DialogFooter className="items-center sm:justify-between">
-          {currentEmployeeName ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="text-muted-foreground"
-              disabled={isPending}
-              onClick={handleRemove}
-            >
-              Zuweisung entfernen
-            </Button>
-          ) : (
-            <span />
-          )}
-          <Button
-            type="button"
-            disabled={isPending || !selectedEmployeeId}
-            onClick={handleSave}
-          >
+          <div className="flex flex-wrap gap-1">
+            {slot.shiftId && slot.employeeName && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-muted-foreground"
+                disabled={isPending}
+                onClick={handleRemove}
+              >
+                Zuweisung entfernen
+              </Button>
+            )}
+            {slot.shiftId && slot.isOneOff && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive"
+                disabled={isPending}
+                onClick={handleDelete}
+              >
+                Schicht löschen
+              </Button>
+            )}
+          </div>
+          <Button type="button" disabled={isPending || !selectedEmployeeId} onClick={handleSave}>
             {isPending ? "Speichern…" : "Speichern"}
           </Button>
         </DialogFooter>

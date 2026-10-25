@@ -2,6 +2,7 @@ import {
   CalendarIcon,
   ClockIcon,
   HomeIcon,
+  LayoutTemplateIcon,
   SettingsIcon,
   ShieldCheckIcon,
   UserPlusIcon,
@@ -28,6 +29,12 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/app/dienstplan",
     label: "Dienstplan",
     icon: CalendarIcon,
+    roles: ["admin", "scheduler"],
+  },
+  {
+    href: "/app/schichtvorlagen",
+    label: "Schichtvorlagen",
+    icon: LayoutTemplateIcon,
     roles: ["admin", "scheduler"],
   },
   {

@@ -2,38 +2,76 @@ import { createClient } from "@/lib/supabase/server";
 import {
   getMonthDateRange,
   getToday,
+  isIsoWeekday,
   parseISODate,
   toISODate,
   type CalendarDate,
 } from "@/lib/shifts/dates";
-import type { ShiftType, UserRole } from "@/types/domain";
+import { normalizeTime } from "@/lib/shifts/time";
+import type { IsoWeekday, UserRole } from "@/types/domain";
 
-export type ShiftAssignment = {
+/** A concrete shift row, with times normalized to `HH:MM`. */
+export type ShiftEntry = {
   id: string;
+  iso: string;
+  date: CalendarDate;
+  startTime: string;
+  endTime: string;
+  label: string;
+  templateId: string | null;
   employeeId: string | null;
   employeeName: string | null;
 };
 
-/** Keyed by ISO `shift_date`. A missing entry means "no row for that day yet". */
-export type ShiftsByDate = Map<string, Partial<Record<ShiftType, ShiftAssignment>>>;
-
-export type GetShiftsForMonthResult =
-  | { status: "ok"; shiftsByDate: ShiftsByDate }
-  | { status: "error" };
-
 type ShiftRow = {
   id: string;
   shift_date: string;
-  shift_type: ShiftType;
+  start_time: string;
+  end_time: string;
+  label: string;
+  template_id: string | null;
   employee_id: string | null;
   employee: { id: string; name: string } | null;
 };
 
+const SHIFT_SELECT =
+  "id, shift_date, start_time, end_time, label, template_id, employee_id, employee:profiles(id, name)";
+
+function toShiftEntry(row: ShiftRow): ShiftEntry | null {
+  const date = parseISODate(row.shift_date);
+  const startTime = normalizeTime(row.start_time);
+  const endTime = normalizeTime(row.end_time);
+  if (!date || !startTime || !endTime) return null;
+
+  return {
+    id: row.id,
+    iso: row.shift_date,
+    date,
+    startTime,
+    endTime,
+    label: row.label,
+    templateId: row.template_id,
+    employeeId: row.employee_id,
+    employeeName: row.employee?.name ?? null,
+  };
+}
+
+function compareShifts(a: ShiftEntry, b: ShiftEntry): number {
+  return (
+    a.iso.localeCompare(b.iso) ||
+    a.startTime.localeCompare(b.startTime) ||
+    a.label.localeCompare(b.label, "de")
+  );
+}
+
+export type GetShiftsForMonthResult =
+  | { status: "ok"; shifts: ShiftEntry[] }
+  | { status: "error" };
+
 /**
- * Loads shifts for one calendar month, filtered server-side by date range.
- * Saturdays without a matching row simply don't appear in the returned
- * map — the UI treats that as "Nicht besetzt" rather than requiring a
- * database row to exist upfront.
+ * Loads all shift rows of one calendar month, filtered server-side by date
+ * range (RLS scopes them to the user's company). Empty template slots have
+ * no row — `buildMonthSchedule()` fills those in from the templates.
  */
 export async function getShiftsForMonth(
   year: number,
@@ -44,7 +82,7 @@ export async function getShiftsForMonth(
 
   const { data, error } = await supabase
     .from("shifts")
-    .select("id, shift_date, shift_type, employee_id, employee:profiles(id, name)")
+    .select(SHIFT_SELECT)
     .gte("shift_date", start)
     .lt("shift_date", end)
     .returns<ShiftRow[]>();
@@ -53,19 +91,82 @@ export async function getShiftsForMonth(
     return { status: "error" };
   }
 
-  const shiftsByDate: ShiftsByDate = new Map();
+  const shifts = data
+    .map(toShiftEntry)
+    .filter((shift): shift is ShiftEntry => shift !== null)
+    .sort(compareShifts);
 
-  for (const row of data) {
-    const dateEntry = shiftsByDate.get(row.shift_date) ?? {};
-    dateEntry[row.shift_type] = {
-      id: row.id,
-      employeeId: row.employee_id,
-      employeeName: row.employee?.name ?? null,
-    };
-    shiftsByDate.set(row.shift_date, dateEntry);
+  return { status: "ok", shifts };
+}
+
+export type ShiftTemplate = {
+  id: string;
+  label: string;
+  weekday: IsoWeekday;
+  startTime: string;
+  endTime: string;
+  active: boolean;
+};
+
+type ShiftTemplateRow = {
+  id: string;
+  label: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  active: boolean;
+};
+
+export type GetShiftTemplatesResult =
+  | { status: "ok"; templates: ShiftTemplate[] }
+  | { status: "error" };
+
+/**
+ * The company's recurring shift slots, ordered by weekday and start time.
+ * RLS already limits rows to the user's own company.
+ */
+export async function getShiftTemplates(
+  options: { includeInactive?: boolean } = {},
+): Promise<GetShiftTemplatesResult> {
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("shift_templates")
+    .select("id, label, weekday, start_time, end_time, active");
+
+  if (!options.includeInactive) {
+    query = query.eq("active", true);
   }
 
-  return { status: "ok", shiftsByDate };
+  const { data, error } = await query.returns<ShiftTemplateRow[]>();
+
+  if (error) {
+    return { status: "error" };
+  }
+
+  const templates: ShiftTemplate[] = [];
+  for (const row of data) {
+    const startTime = normalizeTime(row.start_time);
+    const endTime = normalizeTime(row.end_time);
+    if (!isIsoWeekday(row.weekday) || !startTime || !endTime) continue;
+    templates.push({
+      id: row.id,
+      label: row.label,
+      weekday: row.weekday,
+      startTime,
+      endTime,
+      active: row.active,
+    });
+  }
+
+  templates.sort(
+    (a, b) =>
+      a.weekday - b.weekday ||
+      a.startTime.localeCompare(b.startTime) ||
+      a.label.localeCompare(b.label, "de"),
+  );
+
+  return { status: "ok", templates };
 }
 
 export type AssignableEmployee = {
@@ -81,8 +182,7 @@ export type GetAssignableEmployeesResult =
 /**
  * Employees a shift can be assigned to: active profiles with role
  * `employee` or `scheduler`. A scheduler is themselves a regular worker
- * and stays assignable; `admin` is management-only and never a car-wash
- * employee in Scope 1.
+ * and stays assignable; `admin` is management-only.
  */
 export async function getAssignableEmployees(): Promise<GetAssignableEmployeesResult> {
   const supabase = await createClient();
@@ -102,19 +202,10 @@ export async function getAssignableEmployees(): Promise<GetAssignableEmployeesRe
   return { status: "ok", employees: data };
 }
 
-export type MyShift = {
-  id: string;
-  date: CalendarDate;
-  iso: string;
-  shiftType: ShiftType;
-};
-
 export type GetMyShiftsResult =
-  | { status: "ok"; shifts: MyShift[] }
+  | { status: "ok"; shifts: ShiftEntry[] }
   | { status: "unauthenticated" }
   | { status: "error" };
-
-const SHIFT_TYPE_ORDER: Record<ShiftType, number> = { early: 0, late: 1 };
 
 /**
  * The current user's own upcoming shifts (today onward) — never accepts an
@@ -134,25 +225,19 @@ export async function getMyShifts(): Promise<GetMyShiftsResult> {
 
   const { data, error } = await supabase
     .from("shifts")
-    .select("id, shift_date, shift_type")
+    .select(SHIFT_SELECT)
     .eq("employee_id", userId)
     .gte("shift_date", toISODate(getToday()))
-    .returns<{ id: string; shift_date: string; shift_type: ShiftType }[]>();
+    .returns<ShiftRow[]>();
 
   if (error) {
     return { status: "error" };
   }
 
-  const shifts: MyShift[] = data
-    .map((row) => {
-      const date = parseISODate(row.shift_date);
-      return date ? { id: row.id, date, iso: row.shift_date, shiftType: row.shift_type } : null;
-    })
-    .filter((shift): shift is MyShift => shift !== null)
-    .sort(
-      (a, b) =>
-        a.iso.localeCompare(b.iso) || SHIFT_TYPE_ORDER[a.shiftType] - SHIFT_TYPE_ORDER[b.shiftType],
-    );
+  const shifts = data
+    .map(toShiftEntry)
+    .filter((shift): shift is ShiftEntry => shift !== null)
+    .sort(compareShifts);
 
   return { status: "ok", shifts };
 }

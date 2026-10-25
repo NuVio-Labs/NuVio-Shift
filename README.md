@@ -2,14 +2,15 @@
 
 **Schichten. Einfach geplant.**
 
-NuVio Shift is a lightweight, mobile-first web app for scheduling Saturday shifts in small teams — built to replace a paper schedule with something just as simple to use, but digital.
+NuVio Shift is a lightweight, mobile-first web app for scheduling shifts in small teams — built to replace a paper schedule with something just as simple to use, but digital.
 
 ## Features
 
 - **Authentication & roles** — Supabase Auth with three roles per company: `admin`, `scheduler`, `employee`. No public signup; accounts are created by an admin invite.
 - **Multi-tenant** — Each company's employees, shifts, and settings are isolated at the database level via Postgres Row Level Security.
 - **Onboarding by invite link** — An admin generates a one-time, expiring invite link (with a chosen role) from **Onboarding**; the invitee registers through it and is added straight to the right company.
-- **Schedule** — Fixed Saturday shift model (Früh 08:00–14:00, Spät 14:00–20:00). Schedulers assign, change, and remove employees; employees see their own upcoming shifts; admins get a read-only view plus monthly totals and planned hours.
+- **Shift templates** — Recurring slots per weekday with free times and labels (e.g. „Früh“, every Saturday, 08:00–14:00, or „Putzen“, every Tuesday, 09:00–12:00). Managed by admins and schedulers under **Schichtvorlagen**; deactivated instead of deleted.
+- **Schedule** — The month view shows every day that has a template slot or a shift. Schedulers assign, change, and remove employees, and add one-off shifts on any date with their own times. Employees see their own upcoming shifts; admins get a read-only view plus monthly totals and planned hours (from each shift's real start/end).
 - **PWA & push notifications** — Installable on mobile, with Web Push notifying employees when a shift is assigned, changed, or removed.
 - **Settings** — Self-service profile (name, phone, weekly target hours) with an admin-managed hourly wage shown read-only to its owner; push notification preferences live in the same place.
 
@@ -44,12 +45,17 @@ NuVio Shift is a lightweight, mobile-first web app for scheduling Saturday shift
 
    Open [http://localhost:3000](http://localhost:3000).
 
+## Limitations
+
+- Shifts can't cross midnight yet (end time must be after start time).
+- Editing a template only affects empty slots; already-filled shifts keep the times they were created with.
+
 ## Roles
 
 | Role | Can |
 |---|---|
-| `admin` | View the full schedule, manage employees and their hourly wage, generate onboarding invites |
-| `scheduler` | Assign/change/remove shift assignments |
+| `admin` | View the full schedule, manage employees and their hourly wage, manage shift templates, generate onboarding invites |
+| `scheduler` | Assign/change/remove shift assignments, add/delete one-off shifts, manage shift templates |
 | `employee` | View their own upcoming shifts and profile |
 
 ## Project structure
